@@ -133,14 +133,15 @@ function applyRec() {
   const nowKey = mk(today()), td = new Date().getDate();
   let changed = false;
   db.rec.forEach(r => {
-    let k = addMonths(r.last, 1);
+    const n = r.every || 1;
+    let k = addMonths(r.last, n);
     while (k <= nowKey) {
       const [y, m] = k.split('-').map(Number);
       const day = Math.min(r.day, new Date(y, m, 0).getDate());
       if (k < nowKey || day <= td) {
         db.tx.push({ id: uid(), ts: Date.now(), type: r.type, amount: r.amount, cat: r.cat, acc: r.acc, date: `${k}-${pad(day)}`, note: r.note, rec: r.id, ...(r.type === 'income' ? { cobrado: false } : {}) });
         r.last = k; changed = true;
-        k = addMonths(k, 1);
+        k = addMonths(k, n);
       } else break;
     }
   });
@@ -239,7 +240,7 @@ function goalCard(g) {
 /* fijos de este mes que aún no han llegado a su día (applyRec los apunta ese día) */
 function pendingRec() {
   const [y, m] = nowYM(), key = mk(today()), td = new Date().getDate(), dim = new Date(y, m + 1, 0).getDate();
-  return db.rec.filter(r => r.last < key).map(r => ({ r, d: new Date(y, m, Math.min(r.day, dim)) }))
+  return db.rec.filter(r => addMonths(r.last, r.every || 1) <= key).map(r => ({ r, d: new Date(y, m, Math.min(r.day, dim)) }))
     .filter(({ d }) => d.getDate() > td).sort((a, b) => a.d - b.d);
 }
 
@@ -577,7 +578,7 @@ function catSheet(id, type) {
 }
 function recsSheet() {
   openSheet(`<h2>Gastos e ingresos fijos</h2><p class="note" style="margin:-6px 0 14px">Alquiler, suscripciones, nómina… Se añaden solos cada mes el día que elijas.</p>
-    ${db.rec.length ? `<div class="card list">${db.rec.map(r => { const c = catOf(r.cat); return `<button class="row" data-a="rec-edit" data-id="${r.id}">${bubble(c.icon, c.color)}<span class="grow"><b>${esc(r.note || c.name)}</b><small>Día ${r.day} de cada mes</small></span><span class="amt ${r.type === 'income' ? 'pos' : ''}">${r.type === 'income' ? '+' : '−'}${fmt(r.amount)}</span></button>`; }).join('')}</div>` : ''}
+    ${db.rec.length ? `<div class="card list">${db.rec.map(r => { const c = catOf(r.cat); return `<button class="row" data-a="rec-edit" data-id="${r.id}">${bubble(c.icon, c.color)}<span class="grow"><b>${esc(r.note || c.name)}</b><small>Día ${r.day} · ${({ 1: 'cada mes', 2: 'cada 2 meses', 3: 'cada trimestre', 6: 'cada semestre', 12: 'cada año' })[r.every || 1] || 'cada ' + r.every + ' meses'}</small></span><span class="amt ${r.type === 'income' ? 'pos' : ''}">${r.type === 'income' ? '+' : '−'}${fmt(r.amount)}</span></button>`; }).join('')}</div>` : ''}
     <button class="btn block" data-a="rec-edit">＋ Añadir fijo</button>`);
 }
 function recSheet(id) {
@@ -589,7 +590,8 @@ function recSheet(id) {
     <input id="f-amt" class="bigamt" inputmode="decimal" placeholder="0,00 €" autocomplete="off" value="${r ? inputNum(r.amount) : ''}">
     <div class="cgrid" id="catgrid">${catGrid(draft.type)}</div>
     <div class="two"><label class="field"><span>Día del mes</span><input id="r-day" type="number" min="1" max="31" inputmode="numeric" value="${r ? r.day : new Date().getDate()}"></label>
-    <label class="field"><span>Cuenta</span><select id="f-acc">${db.accounts.map(a => `<option value="${a.id}" ${r && r.acc === a.id ? 'selected' : ''}>${a.icon} ${esc(a.name)}</option>`).join('')}</select></label></div>
+    <label class="field"><span>Se repite</span><select id="r-every">${[[1, 'Cada mes'], [2, 'Cada 2 meses'], [3, 'Cada trimestre'], [6, 'Cada semestre'], [12, 'Cada año']].map(([v, l]) => `<option value="${v}" ${(r && r.every || 1) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+    <div class="two"><label class="field"><span>Cuenta</span><select id="f-acc">${db.accounts.map(a => `<option value="${a.id}" ${r && r.acc === a.id ? 'selected' : ''}>${a.icon} ${esc(a.name)}</option>`).join('')}</select></label></div>
     <label class="field"><span>Nombre</span><input id="f-note" placeholder="Ej. Alquiler, Spotify…" value="${esc(r ? r.note : '')}" autocomplete="off"></label>
     <button class="btn block" data-a="rec-save">Guardar</button><button class="btn ghost block" data-a="recs">Cancelar</button>
     ${r ? '<button class="btn danger block" data-a="rec-del">Eliminar</button>' : ''}`);
@@ -834,9 +836,10 @@ const A = {
   'rec-save'() {
     const amount = num($('#f-amt').value); if (amount <= 0) return toast('Escribe un importe');
     const day = Math.min(31, Math.max(1, parseInt($('#r-day').value) || 1));
-    const rec = { type: draft.type, amount, cat: draft.cat, acc: $('#f-acc').value, day, note: $('#f-note').value.trim() };
+    const every = +$('#r-every').value || 1;
+    const rec = { type: draft.type, amount, cat: draft.cat, acc: $('#f-acc').value, day, every, note: $('#f-note').value.trim() };
     if (draft.id) Object.assign(db.rec.find(x => x.id === draft.id), rec);
-    else db.rec.push({ id: uid(), last: day <= new Date().getDate() ? mk(today()) : addMonths(mk(today()), -1), ...rec });
+    else db.rec.push({ id: uid(), last: day <= new Date().getDate() ? mk(today()) : addMonths(mk(today()), -every), ...rec });
     applyRec(); save(); render(); recsSheet();
   },
   'rec-del'() { if (!confirm('¿Eliminar este fijo? Los movimientos ya creados se mantienen.')) return; db.rec = db.rec.filter(x => x.id !== draft.id); save(); render(); recsSheet(); },
