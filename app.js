@@ -236,6 +236,30 @@ function goalCard(g) {
     <small>${goalHint(g, pi)}</small></span><span class="pct">${Math.round(pi.pct * 100)}%</span></button>`;
 }
 
+/* fijos de este mes que aún no han llegado a su día (applyRec los apunta ese día) */
+function pendingRec() {
+  const [y, m] = nowYM(), key = mk(today()), td = new Date().getDate(), dim = new Date(y, m + 1, 0).getDate();
+  return db.rec.filter(r => r.last < key).map(r => ({ r, d: new Date(y, m, Math.min(r.day, dim)) }))
+    .filter(({ d }) => d.getDate() > td).sort((a, b) => a.d - b.d);
+}
+
+function forecastHtml(key, tt, bal) {
+  if (!db.rec.length) {
+    return db.tx.length ? `<button class="card gcard" data-a="recs"><span class="bubble" style="--c:#12b886">🔁</span><span class="grow"><b>Prevé tu mes</b><small>Añade tus gastos e ingresos fijos y verás aquí cómo acabará el mes.</small></span>${ic('chev')}</button>` : '';
+  }
+  const pend = pendingRec(), pi = sum(pend.filter(p => p.r.type === 'income'), p => p.r.amount), pe = sum(pend.filter(p => p.r.type !== 'income'), p => p.r.amount);
+  const sg = n => (n < 0 ? '−' : '+') + fmt(Math.abs(n)), cl = n => (n < 0 ? 'neg' : 'pos');
+  const now = tt.inc - tt.exp, rest = pi - pe;
+  const row = (l, a, b, c, cls = '') => `<div class="fcr ${cls}"><span>${l}</span><span>${a}</span><span>${b}</span><span>${c}</span></div>`;
+  return `<div class="sec"><h3>Previsión de ${new Date().toLocaleDateString('es-ES', { month: 'long' })}</h3><button data-a="recs">Fijos</button></div>
+    <div class="card fc"><div class="fcr head"><span></span><span>Hasta hoy</span><span>Falta</span><span>Previsto</span></div>
+      ${row('Ingresos', `<b class="pos">+${fmt(tt.inc)}</b>`, `<span class="pos">+${fmt(pi)}</span>`, `<b class="pos">+${fmt(tt.inc + pi)}</b>`)}
+      ${row('Gastos', `<b class="neg">−${fmt(tt.exp)}</b>`, `<span class="neg">−${fmt(pe)}</span>`, `<b class="neg">−${fmt(tt.exp + pe)}</b>`)}
+      ${row('Balance', `<b class="${cl(now)}">${sg(now)}</b>`, `<span class="${cl(rest)}">${sg(rest)}</span>`, `<b class="${cl(now + rest)}">${sg(now + rest)}</b>`, 'tot')}
+      <p class="note" style="margin:10px 0 0">Saldo previsto a fin de mes: <b style="color:var(--ink)">${fmt(bal + rest)}</b>${pend.length ? '' : ' · ya no quedan fijos pendientes'}. Los gastos que apuntes de aquí a final de mes irán restando.</p>
+      ${pend.length ? `<div class="list" style="margin-top:6px">${pend.map(({ r, d }) => { const c = catOf(r.cat); return `<div class="row">${bubble(c.icon, c.color)}<span class="grow"><b>${esc(r.note || c.name)}</b><small>${cap(d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', ''))}</small></span><span class="amt ${r.type === 'income' ? 'pos' : ''}">${r.type === 'income' ? '+' : '−'}${fmt(r.amount)}</span></div>`; }).join('')}</div>` : ''}</div>`;
+}
+
 function viewHome() {
   const key = mk(today()), tt = totals(key);
   const bal = sum(db.accounts, accBalance), reserved = sum(db.goals, savedIn), free = bal - reserved;
@@ -256,6 +280,8 @@ function viewHome() {
       <button class="btn ghost block" data-a="demo">Ver con datos de ejemplo</button></div>`;
   }
 
+  html += forecastHtml(key, tt, bal);
+
   if (db.goals.length) {
     html += `<div class="sec"><h3>Mis metas</h3><button data-a="tab" data-v="goals">Ver todas</button></div>
       <div class="strip">${db.goals.map(goalMini).join('')}<button class="card mini add" data-a="goal-new"><span style="font-size:30px">＋</span>Nueva meta</button></div>`;
@@ -270,14 +296,6 @@ function viewHome() {
   const buds = db.categories.filter(c => c.type === 'expense' && db.budgets[c.id] > 0)
     .map(c => ({ c, spent: spentBy(key, c.id), lim: db.budgets[c.id] })).sort((a, b) => b.spent / b.lim - a.spent / a.lim).slice(0, 3);
   if (buds.length) html += `<div class="sec"><h3>Presupuestos del mes</h3><button data-a="budgets">Editar</button></div><div class="card">${buds.map(budRow).join('')}</div>`;
-
-  const nxt = db.rec.map(r => {
-    const [y, m] = nowYM();
-    let d = new Date(y, m, Math.min(r.day, new Date(y, m + 1, 0).getDate()));
-    if (ymd(d) <= today()) d = new Date(y, m + 1, Math.min(r.day, new Date(y, m + 2, 0).getDate()));
-    return { r, d };
-  }).sort((a, b) => a.d - b.d).slice(0, 3);
-  if (nxt.length) html += `<h3>Próximos gastos fijos</h3><div class="card list">${nxt.map(({ r, d }) => { const c = catOf(r.cat); return `<div class="row">${bubble(c.icon, c.color)}<span class="grow"><b>${esc(r.note || c.name)}</b><small>${cap(d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace('.', ''))}</small></span><span class="amt">${r.type === 'income' ? '+' : '−'}${fmt(r.amount)}</span></div>`; }).join('')}</div>`;
 
   const rec = sortedTx(db.tx).slice(0, 5);
   if (rec.length) html += `<div class="sec"><h3>Últimos movimientos</h3><button data-a="tab" data-v="tx">Ver todos</button></div><div class="card list">${rec.map(txRow).join('')}</div>`;
