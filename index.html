@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es" data-theme="fun">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mis Finanzas</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finanzas">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f4efff">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+<script>
+  // Aplica el estilo elegido antes de pintar, para evitar parpadeos.
+  try { document.documentElement.dataset.theme = localStorage.getItem('finanzas.theme') || 'fun'; } catch (e) {}
+</script>
+</head>
+<body>
+<div id="app">
+  <main id="view"></main>
+
+  <button id="fab" class="fab" data-a="add" aria-label="Añadir">
+    <svg viewBox="0 0 24 24" class="ic"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <nav class="tabbar" aria-label="Navegación">
+    <button class="tab" data-a="tab" data-v="home"><svg viewBox="0 0 24 24" class="ic"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+    <button class="tab" data-a="tab" data-v="tx"><svg viewBox="0 0 24 24" class="ic"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>Movs.</button>
+    <button class="tab" data-a="tab" data-v="goals"><svg viewBox="0 0 24 24" class="ic"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>Metas</button>
+    <button class="tab" data-a="tab" data-v="rep"><svg viewBox="0 0 24 24" class="ic"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg>Informes</button>
+    <button class="tab" data-a="tab" data-v="more"><svg viewBox="0 0 24 24" class="ic"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Más</button>
+  </nav>
+</div>
+
+<div id="sheet" class="sheet">
+  <div class="back" data-a="close"></div>
+  <div class="panel"><div class="grab"></div><div id="sheet-body"></div></div>
+</div>
+<div id="toast" class="toast"></div>
+<input type="file" id="importer" accept=".json,application/json" hidden>
+
+<script src="app.js"></script>
+</body>
+</html>
