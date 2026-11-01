@@ -1,6 +1,6 @@
 // Service worker: deja la app disponible sin conexión.
 // Devuelve lo guardado al instante y lo actualiza en segundo plano.
-const V = 'finanzas-v1';
+const V = 'finanzas-v2';
 const FILES = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 

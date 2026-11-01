@@ -382,6 +382,7 @@ function viewMore() {
       ${link('export', 'save', 'Guardar copia de seguridad', db.settings.lastBackup ? 'hace ' + Math.max(0, Math.round((Date.now() - db.settings.lastBackup) / 864e5)) + ' d' : 'nunca')}
       ${link('import', 'upload', 'Restaurar copia')}
       ${link('demo', 'spark', 'Cargar datos de ejemplo')}
+      ${link('welcome', 'spark', 'Volver a la configuración inicial', 'nombre y estilo')}
       ${link('help', 'help', 'Cómo instalarla en el iPhone')}
       <button class="linkrow" data-a="reset" style="color:var(--neg)">${ic('trash')}<span>Borrar todos los datos</span></button></div>
     <p class="note" style="text-align:center;margin-top:18px">Tus datos se guardan solo en este teléfono.<br>Nada se envía a ningún servidor.</p>`;
@@ -430,7 +431,8 @@ function goalSheet(id) {
     <div class="field"><span>Icono</span>${emojiPicker(g ? g.icon : '')}<input id="g-icon" maxlength="4" placeholder="…o escribe un emoji" value="${esc(g ? g.icon : '🎯')}" style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--line);background:var(--card)"></div>
     <div class="field"><span>Color</span>${colorPicker(draft.color)}</div>
     <div class="two"><label class="field"><span>Objetivo (€)</span><input id="g-target" inputmode="decimal" placeholder="3000" value="${g ? inputNum(g.target) : ''}"></label>
-    ${g ? '' : '<label class="field"><span>Ya tengo (€)</span><input id="g-init" inputmode="decimal" placeholder="0"></label>'}</div>
+    <label class="field"><span>${g ? 'Llevo ahorrado (€)' : 'Ya tengo (€)'}</span><input id="g-init" inputmode="decimal" placeholder="0" value="${g ? inputNum(Math.round(savedIn(g) * 100) / 100) : ''}"></label></div>
+    ${g ? '<p class="note" style="margin:-4px 0 12px">Si cambias lo que llevas ahorrado, se anota un ajuste en el historial por la diferencia.</p>' : ''}
     <label class="field"><span>Fecha límite (opcional)</span><input type="date" id="g-date" value="${g && g.deadline ? g.deadline : ''}"></label>
     <button class="btn block" data-a="goal-save">${g ? 'Guardar cambios' : 'Crear meta'}</button>
     ${g ? `<button class="btn ghost block" data-a="goal-open" data-id="${g.id}">Cancelar</button><button class="btn danger block" data-a="goal-del" data-id="${g.id}">Eliminar meta</button>` : ''}`);
@@ -559,13 +561,13 @@ function helpSheet() {
     <p class="note">Importante: guarda una copia de seguridad de vez en cuando (Más → Guardar copia). Si borras los datos de Safari o cambias de móvil, la copia te permite recuperarlo todo.</p>
     <button class="btn block" data-a="close">Entendido</button>`);
 }
-function welcomeSheet() {
-  openSheet(`<h2>¡Hola! 👋</h2><p class="note" style="margin:-6px 0 16px">Vamos a dejar la app a tu gusto. Podrás cambiarlo cuando quieras en Más → Apariencia.</p>
+function welcomeSheet(again) {
+  openSheet(`<h2>${again ? 'Configuración inicial' : '¡Hola! 👋'}</h2><p class="note" style="margin:-6px 0 16px">${again ? 'Cambia tu nombre o el estilo de la app. Tus datos no se tocan.' : 'Vamos a dejar la app a tu gusto. Podrás cambiarlo cuando quieras en Más → Apariencia.'}</p>
     <label class="field"><span>¿Cómo te llamas? (opcional)</span><input id="w-name" autocomplete="off" value="${esc(db.settings.name)}"></label>
     <div class="field"><span>Elige tu estilo</span></div>
     <div class="opts"><button class="opt ${isMin() ? '' : 'on'}" data-a="theme-w" data-v="fun"><div class="pv" style="background:linear-gradient(135deg,#7c4dff,#ff5fa2);color:#fff;font-size:34px">🫙</div>Colorido y divertido</button>
     <button class="opt ${isMin() ? 'on' : ''}" data-a="theme-w" data-v="min"><div class="pv" style="background:#fafaf8;border:1px solid #e8e8e3;color:#111;font-size:34px;font-weight:300">◯</div>Minimalista</button></div>
-    <button class="btn block" data-a="welcome-ok">Empezar</button><button class="btn ghost block" data-a="demo-w">Probar con datos de ejemplo</button>`);
+    <button class="btn block" data-a="welcome-ok">${again ? 'Guardar' : 'Empezar'}</button>${again ? '' : '<button class="btn ghost block" data-a="demo-w">Probar con datos de ejemplo</button>'}`);
 }
 
 /* ---------- datos de ejemplo ---------- */
@@ -696,7 +698,12 @@ const A = {
     if (target <= 0) return toast('Indica el objetivo en euros');
     const icon = ($('#g-icon').value.trim() || '🎯'), deadline = $('#g-date').value || '';
     if (draft.id) {
-      Object.assign(db.goals.find(x => x.id === draft.id), { name, target, icon, deadline, color: draft.color });
+      const g = db.goals.find(x => x.id === draft.id), raw = $('#g-init').value.trim();
+      Object.assign(g, { name, target, icon, deadline, color: draft.color });
+      if (raw !== '') {
+        const diff = Math.round((num(raw) - savedIn(g)) * 100) / 100;
+        if (diff !== 0) g.contribs.push({ id: uid(), date: today(), amount: diff, note: 'Ajuste de lo ahorrado' });
+      }
       save(); render(); goalDetail(draft.id); toast('Meta actualizada ✓');
     } else {
       const g = { id: uid(), name, icon, color: draft.color, target, deadline, created: today(), plan: { type: deadline ? 'date' : 'none' }, contribs: [] };
@@ -778,6 +785,7 @@ const A = {
   demo() { if (loadDemo()) { closeSheet(); ui.tab = 'home'; render(); toast('Datos de ejemplo cargados'); } },
   'demo-w'() { db = demoDB(); save(); closeSheet(); ui.tab = 'home'; render(); },
   reset() { if (confirm('Se borrará todo (movimientos, metas, ajustes). Esto no se puede deshacer. ¿Seguro?')) { db = blankDB(); db.settings.onboarded = true; save(); render(); toast('Datos borrados'); } },
+  welcome() { welcomeSheet(true); },
   'welcome-ok'() { db.settings.name = $('#w-name').value.trim(); db.settings.onboarded = true; save(); closeSheet(); render(); },
 };
 
