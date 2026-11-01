@@ -138,7 +138,7 @@ function applyRec() {
       const [y, m] = k.split('-').map(Number);
       const day = Math.min(r.day, new Date(y, m, 0).getDate());
       if (k < nowKey || day <= td) {
-        db.tx.push({ id: uid(), ts: Date.now(), type: r.type, amount: r.amount, cat: r.cat, acc: r.acc, date: `${k}-${pad(day)}`, note: r.note, rec: r.id });
+        db.tx.push({ id: uid(), ts: Date.now(), type: r.type, amount: r.amount, cat: r.cat, acc: r.acc, date: `${k}-${pad(day)}`, note: r.note, rec: r.id, ...(r.type === 'income' ? { cobrado: false } : {}) });
         r.last = k; changed = true;
         k = addMonths(k, 1);
       } else break;
@@ -280,7 +280,7 @@ function viewHome() {
       <button class="btn ghost block" data-a="demo">Ver con datos de ejemplo</button></div>`;
   }
 
-  html += forecastHtml(key, tt, bal);
+  html += forecastHtml(key, tt, bal) + cobrosHtml(key);
 
   if (db.goals.length) {
     html += `<div class="sec"><h3>Mis metas</h3><button data-a="tab" data-v="goals">Ver todas</button></div>
@@ -323,9 +323,27 @@ function txListHtml() {
     return `<div class="day"><span>${dayLabel(d)}</span><span>${net > 0 ? '+' : '−'}${fmt(Math.abs(net))}</span></div><div class="card list">${groups[d].map(txRow).join('')}</div>`;
   }).join('');
 }
+/* checklist de cobros: ingresos del mes + fijos que aún no han llegado (solo mes actual) */
+function cobrosHtml(key) {
+  const items = monthTx(key).filter(t => t.type === 'income').map(t => ({ a: 'cobro', id: t.id, date: t.date, name: t.note || catOf(t.cat).name, cat: t.cat, amount: t.amount, done: t.cobrado !== false }));
+  if (key === mk(today())) pendingRec().filter(p => p.r.type === 'income').forEach(({ r, d }) =>
+    items.push({ a: 'cobro-rec', id: r.id, date: ymd(d), name: r.note || catOf(r.cat).name, cat: r.cat, amount: r.amount, done: false, exp: true }));
+  if (!items.length) return '';
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  const open = items.filter(i => !i.done), n = items.length - open.length;
+  const rows = items.map(i => {
+    const c = catOf(i.cat), when = parse(i.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '');
+    return `<div class="row ${i.done ? 'cobrado' : ''}"><button class="chk ${i.done ? 'on' : ''}" data-a="${i.a}" data-id="${i.id}" aria-label="${i.done ? 'Marcar como no cobrado' : 'Marcar como cobrado'}">${i.done ? '✓' : ''}</button>
+      ${bubble(c.icon, c.color)}<span class="grow"><b>${esc(i.name)}</b><small>${i.exp ? 'Esperado el ' + when : (i.done ? 'Cobrado · ' : 'Sin confirmar · ') + when}</small></span><span class="amt ${i.done ? 'pos' : ''}">+${fmt(i.amount)}</span></div>`;
+  }).join('');
+  return `<div class="sec"><h3>Cobros de ${monthName(key).split(' ')[0]}</h3><span class="mute" style="font-size:13px;font-weight:600">${n} de ${items.length}</span></div>
+    <div class="card cobros"><div class="list">${rows}</div>
+    <p class="note" style="margin:8px 0 0">${open.length ? `Por cobrar: <b style="color:var(--ink)">${fmt(sum(open, i => i.amount))}</b>. Marca cada ingreso cuando lo veas en tu cuenta.` : '✅ Todo cobrado este mes.'}</p></div>`;
+}
+
 function viewTx() {
   const tt = totals(ui.month);
-  return `<div class="top"><h1>Movimientos</h1></div>${monthNav()}
+  return `<div class="top"><h1>Movimientos</h1></div>${monthNav()}${cobrosHtml(ui.month)}
     <div class="stats" style="margin-bottom:14px"><div class="card flat"><small>Ingresos</small><b class="pos">+${fmt(tt.inc)}</b></div><div class="card flat"><small>Gastos</small><b class="neg">−${fmt(tt.exp)}</b></div></div>
     <input id="q" class="search" type="search" placeholder="Buscar…" value="${esc(ui.q)}" autocomplete="off">
     <div class="chips">${[['all', 'Todos'], ['expense', 'Gastos'], ['income', 'Ingresos']].map(([v, l]) => `<button class="chip ${ui.filter === v ? 'on' : ''}" data-a="filter" data-v="${v}">${l}</button>`).join('')}</div>
@@ -433,6 +451,7 @@ function txSheet(id) {
     <div class="two"><label class="field"><span>Fecha</span><input type="date" id="f-date" value="${t ? t.date : today()}"></label>
     <label class="field"><span>Cuenta</span><select id="f-acc">${db.accounts.map(a => `<option value="${a.id}" ${t && t.acc === a.id ? 'selected' : ''}>${a.icon} ${esc(a.name)}</option>`).join('')}</select></label></div>
     <label class="field"><span>Nota (opcional)</span><input id="f-note" placeholder="Ej. Compra del súper" value="${esc(t ? t.note : '')}" autocomplete="off"></label>
+    <label class="repeat" id="f-cob-wrap" ${draft.type === 'income' ? '' : 'hidden'}><input type="checkbox" id="f-cob" ${t && t.cobrado === false ? '' : 'checked'}><span><b>✅ Ya cobrado</b><small>Desmárcalo si aún no lo has recibido; lo verás en la lista de cobros del mes.</small></span></label>
     ${t ? '' : '<label class="repeat"><input type="checkbox" id="f-rep"><span><b>🔁 Repetir cada mes</b><small>Se añade solo el mismo día de cada mes (alquiler, suscripciones, nómina…)</small></span></label>'}
     <button class="btn block" data-a="tx-save">${t ? 'Guardar cambios' : 'Guardar'}</button>
     ${t ? '<button class="btn danger block" data-a="tx-del">Eliminar</button>' : ''}`);
@@ -681,6 +700,7 @@ function setTheme(t, rerender = true) {
 function syncTypeSheet() {
   $('#tseg').innerHTML = txSeg();
   $('#catgrid').innerHTML = catGrid(draft.type);
+  const cw = $('#f-cob-wrap'); if (cw) cw.hidden = draft.type !== 'income';
 }
 function budgetAlert(t) {
   if (t.type !== 'expense' || mk(t.date) !== mk(today())) return;
@@ -710,8 +730,9 @@ const A = {
     const amount = num($('#f-amt').value);
     if (amount <= 0) return toast('Escribe un importe');
     const rec = { type: draft.type, amount, cat: draft.cat, acc: $('#f-acc').value, date: $('#f-date').value || today(), note: $('#f-note').value.trim() };
+    if (draft.type === 'income' && $('#f-cob') && !$('#f-cob').checked) rec.cobrado = false;
     let t, repeated = false;
-    if (draft.id) { t = db.tx.find(x => x.id === draft.id); Object.assign(t, rec); }
+    if (draft.id) { t = db.tx.find(x => x.id === draft.id); delete t.cobrado; Object.assign(t, rec); }
     else {
       t = { id: uid(), ts: Date.now(), ...rec }; db.tx.push(t);
       if ($('#f-rep') && $('#f-rep').checked) {
@@ -721,6 +742,12 @@ const A = {
     }
     save(); closeSheet(); render();
     if (draft.id) toast('Cambios guardados ✓'); else if (repeated) toast('Añadido y se repetirá cada mes 🔁'); else { toast('Movimiento añadido ✓'); setTimeout(() => budgetAlert(t), 1500); }
+  },
+  cobro(el) { const t = db.tx.find(x => x.id === el.dataset.id); if (!t) return; t.cobrado = t.cobrado === false; save(); render(); if (t.cobrado) toast('Cobro confirmado ✓'); },
+  'cobro-rec'(el) {
+    const r = db.rec.find(x => x.id === el.dataset.id); if (!r) return;
+    db.tx.push({ id: uid(), ts: Date.now(), type: 'income', amount: r.amount, cat: r.cat, acc: r.acc, date: today(), note: r.note, rec: r.id, cobrado: true });
+    r.last = mk(today()); save(); render(); toast('Cobro confirmado ✓');
   },
   'tx-del'() { if (!confirm('¿Eliminar este movimiento?')) return; db.tx = db.tx.filter(x => x.id !== draft.id); save(); closeSheet(); render(); toast('Eliminado'); },
 
