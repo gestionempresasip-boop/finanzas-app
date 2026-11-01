@@ -264,3 +264,8 @@ button.card.mini, .mini { flex: none; width: 138px; scroll-snap-align: start; te
 .chk.on { background: var(--pos); border-color: var(--pos); color: #fff; }
 .cobros { padding-top: 6px; padding-bottom: 14px; }
 .row.cobrado .grow b { color: var(--mute); }
+
+/* aviso de datos de ejemplo */
+.demo-banner { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 14px; border: 1px dashed var(--warn); }
+.demo-banner small { display: block; }
+.demo-banner .btn { width: auto; padding: 10px 18px; flex: none; }

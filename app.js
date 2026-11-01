@@ -5,6 +5,7 @@
 
 /* ---------- utilidades ---------- */
 const KEY = 'finanzas.v1';
+const APP_V = 8; // súbela junto con la de sw.js al publicar cambios
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
@@ -269,6 +270,7 @@ function viewHome() {
   const nm = db.settings.name ? ', ' + esc(db.settings.name) : '';
   let html = `<div class="top"><div><small>${cap(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</small>
     <h1>${hi}${nm} <span class="only-fun">👋</span></h1></div></div>`;
+  if (db.settings.demo) html += `<div class="card demo-banner"><span class="grow"><b>🧪 Estás viendo datos de ejemplo</b><small>No son tus datos reales.</small></span><button class="btn" data-a="demo-off">Quitar</button></div>`;
 
   html += `<div class="card hero"><small>Saldo total</small><div class="big">${fmt(bal)}</div>
     <div class="sub2"><span><span class="only-fun">🎯 </span>En metas <b>${fmt(reserved)}</b></span><span><span class="only-fun">✨ </span>Libre <b>${fmt(free)}</b></span></div>
@@ -419,6 +421,8 @@ function viewMore() {
     <h3>Tus datos</h3><div class="card">
       ${link('export', 'save', 'Guardar copia de seguridad', db.settings.lastBackup ? 'hace ' + Math.max(0, Math.round((Date.now() - db.settings.lastBackup) / 864e5)) + ' d' : 'nunca')}
       ${link('import', 'upload', 'Restaurar copia')}
+      ${link('paste', 'upload', 'Restaurar pegando texto')}
+      ${link('update', 'repeat', 'Buscar actualización', 'versión ' + APP_V)}
       ${link('demo', 'spark', 'Cargar datos de ejemplo')}
       ${link('welcome', 'spark', 'Volver a la configuración inicial', 'nombre y estilo')}
       ${link('help', 'help', 'Cómo instalarla en el iPhone')}
@@ -614,7 +618,7 @@ function welcomeSheet(again) {
 /* ---------- datos de ejemplo ---------- */
 function demoDB() {
   const d = blankDB();
-  d.settings = { ...db.settings, onboarded: true, lastBackup: Date.now() };
+  d.settings = { ...db.settings, onboarded: true, lastBackup: Date.now(), demo: true };
   d.accounts[0].balance0 = 5200; d.accounts[1].balance0 = 140;
   let s = 42; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const r2 = (a, b) => Math.round((a + rnd() * (b - a)) * 100) / 100;
@@ -651,7 +655,7 @@ function demoDB() {
   return d;
 }
 function loadDemo() {
-  if (db.tx.length && !confirm('Esto reemplaza tus datos actuales por datos de ejemplo. ¿Continuar?')) return false;
+  if ((db.tx.length || db.goals.length || db.rec.length) && !confirm('Esto reemplaza tus datos actuales por datos de ejemplo. ¿Continuar?')) return false;
   db = demoDB(); save(); return true;
 }
 
@@ -669,19 +673,26 @@ async function exportData() {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast('Copia guardada'); render();
 }
+function restoreText(text) {
+  try {
+    const d = JSON.parse(text);
+    if (!Array.isArray(d.tx) || !Array.isArray(d.accounts) || !Array.isArray(d.categories)) throw new Error('formato');
+    if (!confirm(`Se reemplazarán tus datos actuales por la copia (${d.tx.length} movimientos, ${(d.goals || []).length} metas, ${(d.rec || []).length} fijos). ¿Continuar?`)) return false;
+    const b = blankDB();
+    db = Object.assign(b, d, { settings: Object.assign(b.settings, d.settings, { onboarded: true }) });
+    applyRec(); save(); closeSheet(); ui.tab = 'home'; render(); toast('Copia restaurada ✓');
+    return true;
+  } catch (e) { toast('Esa copia no es válida'); return false; }
+}
 function importData(file) {
   const rd = new FileReader();
-  rd.onload = () => {
-    try {
-      const d = JSON.parse(rd.result);
-      if (!Array.isArray(d.tx) || !Array.isArray(d.accounts) || !Array.isArray(d.categories)) throw new Error('formato');
-      if (!confirm(`Se reemplazarán tus datos actuales por la copia (${d.tx.length} movimientos, ${(d.goals || []).length} metas). ¿Continuar?`)) return;
-      const b = blankDB();
-      db = Object.assign(b, d, { settings: Object.assign(b.settings, d.settings, { onboarded: true }) });
-      save(); render(); toast('Copia restaurada ✓');
-    } catch (e) { toast('Ese archivo no es una copia válida'); }
-  };
+  rd.onload = () => restoreText(rd.result);
   rd.readAsText(file);
+}
+function pasteSheet() {
+  openSheet(`<h2>Restaurar pegando texto</h2><p class="note" style="margin:-6px 0 12px">Pega aquí el contenido completo de tu copia de seguridad (empieza por <b>{"v":1</b>).</p>
+    <textarea id="paste-t" rows="8" placeholder='{"v":1,…' style="width:100%;padding:12px 14px;border-radius:13px;border:1px solid var(--line);background:var(--card);margin-bottom:12px"></textarea>
+    <button class="btn block" data-a="paste-ok">Restaurar</button><button class="btn ghost block" data-a="close">Cancelar</button>`);
 }
 
 /* ---------- acciones ---------- */
@@ -849,6 +860,21 @@ const A = {
   help() { helpSheet(); },
   demo() { if (loadDemo()) { closeSheet(); ui.tab = 'home'; render(); toast('Datos de ejemplo cargados'); } },
   'demo-w'() { db = demoDB(); save(); closeSheet(); ui.tab = 'home'; render(); },
+  paste() { pasteSheet(); },
+  'paste-ok'() { const t = $('#paste-t').value.trim(); if (!t) return toast('Pega primero el texto'); restoreText(t); },
+  async update() {
+    toast('Buscando actualización…');
+    try {
+      if ('serviceWorker' in navigator) (await navigator.serviceWorker.getRegistrations()).forEach(r => r.unregister());
+      if (window.caches) await Promise.all((await caches.keys()).map(k => caches.delete(k)));
+    } catch (e) { }
+    location.reload();
+  },
+  'demo-off'() {
+    if (!confirm('Se quitan los datos de ejemplo y la app queda vacía para empezar con los tuyos. ¿Continuar?')) return;
+    const name = db.settings.name; db = blankDB(); db.settings.name = name; db.settings.onboarded = true;
+    save(); ui.tab = 'home'; render(); toast('Datos de ejemplo quitados');
+  },
   reset() { if (confirm('Se borrará todo (movimientos, metas, ajustes). Esto no se puede deshacer. ¿Seguro?')) { db = blankDB(); db.settings.onboarded = true; save(); render(); toast('Datos borrados'); } },
   welcome() { welcomeSheet(true); },
   'welcome-ok'() { db.settings.name = $('#w-name').value.trim(); db.settings.onboarded = true; save(); closeSheet(); render(); },
@@ -875,4 +901,9 @@ try { const p = localStorage.getItem('finanzas.pal'); if (p && PALS.some(x => x[
 render();
 if (!db.settings.onboarded) welcomeSheet();
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
-if ('serviceWorker' in navigator && location.protocol.startsWith('http') && location.hostname !== 'localhost') navigator.serviceWorker.register('sw.js').catch(() => { });
+if ('serviceWorker' in navigator && location.protocol.startsWith('http') && location.hostname !== 'localhost') {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // al volver a la app, comprueba si hay versión nueva
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => { }); });
+  }).catch(() => { });
+}
