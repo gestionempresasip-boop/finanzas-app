@@ -414,6 +414,7 @@ function txSheet(id) {
     <div class="two"><label class="field"><span>Fecha</span><input type="date" id="f-date" value="${t ? t.date : today()}"></label>
     <label class="field"><span>Cuenta</span><select id="f-acc">${db.accounts.map(a => `<option value="${a.id}" ${t && t.acc === a.id ? 'selected' : ''}>${a.icon} ${esc(a.name)}</option>`).join('')}</select></label></div>
     <label class="field"><span>Nota (opcional)</span><input id="f-note" placeholder="Ej. Compra del súper" value="${esc(t ? t.note : '')}" autocomplete="off"></label>
+    ${t ? '' : '<label class="repeat"><input type="checkbox" id="f-rep"><span><b>🔁 Repetir cada mes</b><small>Se añade solo el mismo día de cada mes (alquiler, suscripciones, nómina…)</small></span></label>'}
     <button class="btn block" data-a="tx-save">${t ? 'Guardar cambios' : 'Guardar'}</button>
     ${t ? '<button class="btn danger block" data-a="tx-del">Eliminar</button>' : ''}`);
   if (!t) setTimeout(() => $('#f-amt') && $('#f-amt').focus(), 320);
@@ -681,11 +682,17 @@ const A = {
     const amount = num($('#f-amt').value);
     if (amount <= 0) return toast('Escribe un importe');
     const rec = { type: draft.type, amount, cat: draft.cat, acc: $('#f-acc').value, date: $('#f-date').value || today(), note: $('#f-note').value.trim() };
-    let t;
+    let t, repeated = false;
     if (draft.id) { t = db.tx.find(x => x.id === draft.id); Object.assign(t, rec); }
-    else { t = { id: uid(), ts: Date.now(), ...rec }; db.tx.push(t); }
+    else {
+      t = { id: uid(), ts: Date.now(), ...rec }; db.tx.push(t);
+      if ($('#f-rep') && $('#f-rep').checked) {
+        const r = { id: uid(), type: rec.type, amount, cat: rec.cat, acc: rec.acc, note: rec.note, day: +rec.date.slice(8, 10), last: mk(rec.date) };
+        db.rec.push(r); t.rec = r.id; repeated = true;
+      }
+    }
     save(); closeSheet(); render();
-    if (draft.id) toast('Cambios guardados ✓'); else { toast('Movimiento añadido ✓'); setTimeout(() => budgetAlert(t), 1500); }
+    if (draft.id) toast('Cambios guardados ✓'); else if (repeated) toast('Añadido y se repetirá cada mes 🔁'); else { toast('Movimiento añadido ✓'); setTimeout(() => budgetAlert(t), 1500); }
   },
   'tx-del'() { if (!confirm('¿Eliminar este movimiento?')) return; db.tx = db.tx.filter(x => x.id !== draft.id); save(); closeSheet(); render(); toast('Eliminado'); },
 

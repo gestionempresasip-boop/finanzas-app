@@ -222,3 +222,10 @@ button.card.mini, .mini { flex: none; width: 138px; scroll-snap-align: start; te
 .linkrow:last-child { border: 0; }
 .linkrow .ic { color: var(--mute); width: 20px; height: 20px; }
 .linkrow small { margin-left: auto; font-weight: 500; }
+
+/* casilla "repetir cada mes" */
+.repeat { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 4px 0 14px; border: 1px solid var(--line); border-radius: var(--r-sm, 14px); background: var(--card); cursor: pointer; }
+.repeat input { width: 22px; height: 22px; flex: none; accent-color: var(--accent, #7c4dff); }
+.repeat span { display: flex; flex-direction: column; gap: 2px; }
+.repeat b { font-size: 15px; }
+.repeat small { color: var(--mute, #888); font-size: 12.5px; line-height: 1.3; }
