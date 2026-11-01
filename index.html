@@ -15,7 +15,10 @@
 <link rel="stylesheet" href="styles.css">
 <script>
   // Aplica el estilo elegido antes de pintar, para evitar parpadeos.
-  try { document.documentElement.dataset.theme = localStorage.getItem('finanzas.theme') || 'fun'; } catch (e) {}
+  try {
+    document.documentElement.dataset.theme = localStorage.getItem('finanzas.theme') || 'fun';
+    var p = localStorage.getItem('finanzas.pal'); if (p) document.documentElement.dataset.pal = p;
+  } catch (e) {}
 </script>
 </head>
 <body>

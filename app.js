@@ -188,7 +188,7 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400);
 }
 function confetti() {
-  const cols = isMin() ? ['#111', '#777', '#bbb', '#1f7a5a'] : ['#7c4dff', '#ff5fa2', '#ffa62b', '#12b886', '#2f9bff'];
+  const cols = isMin() ? ['#111', '#777', '#bbb', '#1f7a5a'] : [...(PALS.find(p => p[0] === curPal()) || PALS[0]).slice(2), '#ffa62b', '#12b886', '#2f9bff'];
   for (let i = 0; i < (isMin() ? 36 : 70); i++) {
     const e = document.createElement('i');
     e.className = 'cf';
@@ -250,7 +250,7 @@ function forecastHtml(key, tt, bal) {
   const pend = pendingRec(), pi = sum(pend.filter(p => p.r.type === 'income'), p => p.r.amount), pe = sum(pend.filter(p => p.r.type !== 'income'), p => p.r.amount);
   const sg = n => (n < 0 ? '−' : '+') + fmt(Math.abs(n)), cl = n => (n < 0 ? 'neg' : 'pos');
   const now = tt.inc - tt.exp, rest = pi - pe;
-  const row = (l, a, b, c, cls = '') => `<div class="fcr ${cls}"><span>${l}</span><span>${a}</span><span>${b}</span><span>${c}</span></div>`;
+  const row = (l, a, b, c, cls = '') => `<div class="fcr ${cls}"><span>${l}</span><span>${a}</span><span>${b.replace(/>[+−]0,00\s€</, '>—<')}</span><span>${c}</span></div>`;
   return `<div class="sec"><h3>Previsión de ${new Date().toLocaleDateString('es-ES', { month: 'long' })}</h3><button data-a="recs">Fijos</button></div>
     <div class="card fc"><div class="fcr head"><span></span><span>Hasta hoy</span><span>Falta</span><span>Previsto</span></div>
       ${row('Ingresos', `<b class="pos">+${fmt(tt.inc)}</b>`, `<span class="pos">+${fmt(pi)}</span>`, `<b class="pos">+${fmt(tt.inc + pi)}</b>`)}
@@ -395,7 +395,8 @@ function viewMore() {
       ${link('accounts', 'wallet', 'Cuentas', `${db.accounts.length}`)}
       ${link('recs', 'repeat', 'Gastos e ingresos fijos', `${db.rec.length}`)}
       ${link('cats', 'tag', 'Categorías', `${db.categories.length}`)}</div>
-    <h3>Apariencia</h3><div class="card"><div class="seg" style="margin:0"><button class="${isMin() ? '' : 'on'}" data-a="theme" data-v="fun">🎨 Colorido</button><button class="${isMin() ? 'on' : ''}" data-a="theme" data-v="min">◻︎ Minimalista</button></div></div>
+    <h3>Apariencia</h3><div class="card"><div class="seg" style="margin:0"><button class="${isMin() ? '' : 'on'}" data-a="theme" data-v="fun">🎨 Colorido</button><button class="${isMin() ? 'on' : ''}" data-a="theme" data-v="min">◻︎ Minimalista</button></div>
+      ${isMin() ? '' : `<span class="pal-l">Colores</span><div class="pals">${PALS.map(([id, nm, a, b]) => `<button class="pal ${curPal() === id ? 'on' : ''}" style="background:linear-gradient(135deg,${a},${b})" data-a="pal" data-v="${id}" aria-label="${nm}" title="${nm}"></button>`).join('')}</div>`}</div>
     <h3>Tus datos</h3><div class="card">
       ${link('export', 'save', 'Guardar copia de seguridad', db.settings.lastBackup ? 'hace ' + Math.max(0, Math.round((Date.now() - db.settings.lastBackup) / 864e5)) + ' d' : 'nunca')}
       ${link('import', 'upload', 'Restaurar copia')}
@@ -664,6 +665,14 @@ function importData(file) {
 
 /* ---------- acciones ---------- */
 const mark = (el, sel) => { $$(sel, el.parentElement).forEach(x => x.classList.remove('on')); el.classList.add('on'); };
+const PALS = [['violeta', 'Violeta', '#7c4dff', '#ff5fa2'], ['oceano', 'Océano', '#1e6bff', '#00c9b7'], ['menta', 'Menta', '#0e9f6e', '#9be15d'],
+  ['atardecer', 'Atardecer', '#ff8a1f', '#ff3d8b'], ['frambuesa', 'Frambuesa', '#c2185b', '#ff7a9c']];
+const curPal = () => document.documentElement.dataset.pal || 'violeta';
+function setPal(p, rerender = true) {
+  document.documentElement.dataset.pal = p;
+  try { localStorage.setItem('finanzas.pal', p); } catch (e) { }
+  if (rerender) render();
+}
 function setTheme(t, rerender = true) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('finanzas.theme', t); } catch (e) { }
@@ -688,6 +697,7 @@ const A = {
   'm-next'() { if (ui.month < mk(today())) { ui.month = addMonths(ui.month, 1); render(); } },
   filter(el) { ui.filter = el.dataset.v; render(); },
   theme(el) { setTheme(el.dataset.v); },
+  pal(el) { setPal(el.dataset.v); },
   'theme-w'(el) { setTheme(el.dataset.v, false); mark(el, '.opt'); render(); },
   add() { txSheet(); },
 
@@ -831,6 +841,7 @@ document.addEventListener('change', e => {
 /* ---------- arranque ---------- */
 applyRec();
 try { const t = localStorage.getItem('finanzas.theme'); if (t) setTheme(t, false); } catch (e) { }
+try { const p = localStorage.getItem('finanzas.pal'); if (p && PALS.some(x => x[0] === p)) setPal(p, false); } catch (e) { }
 render();
 if (!db.settings.onboarded) welcomeSheet();
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
